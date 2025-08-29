@@ -256,7 +256,7 @@ export default function VideoConverter() {
       ? JSON.parse(currentJob.metadata.crop_settings)
       : currentJob.metadata.crop_settings
 
-    // Fix: Handle undefined currentCropSettings with proper type checking
+    // Fix: Handle undefined currentCropSettings with proper null/undefined checks
     if (!currentCropSettings || typeof currentCropSettings !== 'object') {
       return
     }
@@ -264,10 +264,17 @@ export default function VideoConverter() {
     setCurrentJob(prev => {
       if (!prev) return null
       
-      // Ensure currentCropSettings is not null/undefined before spreading
-      const safeCropSettings = currentCropSettings && typeof currentCropSettings === 'object' 
+      // Create a safe default crop settings object to prevent spread error
+      const defaultCropSettings = {
+        position: 'center' as const,
+        smart_crop: true,
+        aspect_ratio: { width: 9, height: 16 }
+      }
+      
+      // Ensure we have a valid object to spread
+      const safeCropSettings = (currentCropSettings && typeof currentCropSettings === 'object') 
         ? currentCropSettings 
-        : { position: 'center', smart_crop: true, aspect_ratio: { width: 9, height: 16 } }
+        : defaultCropSettings
       
       return {
         ...prev,
@@ -290,7 +297,7 @@ export default function VideoConverter() {
       ? JSON.parse(currentJob.metadata.crop_settings)
       : currentJob.metadata.crop_settings
 
-    // Fix: Handle undefined currentCropSettings with proper type checking
+    // Fix: Handle undefined currentCropSettings with proper null/undefined checks
     if (!currentCropSettings || typeof currentCropSettings !== 'object') {
       return
     }
@@ -298,10 +305,17 @@ export default function VideoConverter() {
     setCurrentJob(prev => {
       if (!prev) return null
       
-      // Ensure currentCropSettings is not null/undefined before spreading
-      const safeCropSettings = currentCropSettings && typeof currentCropSettings === 'object' 
+      // Create a safe default crop settings object to prevent spread error
+      const defaultCropSettings = {
+        position: 'center' as const,
+        smart_crop: true,
+        aspect_ratio: { width: 9, height: 16 }
+      }
+      
+      // Ensure we have a valid object to spread
+      const safeCropSettings = (currentCropSettings && typeof currentCropSettings === 'object') 
         ? currentCropSettings 
-        : { position: 'center', smart_crop: true, aspect_ratio: { width: 9, height: 16 } }
+        : defaultCropSettings
       
       return {
         ...prev,
