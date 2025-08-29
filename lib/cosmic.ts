@@ -5,53 +5,59 @@ const bucketSlug = process.env.COSMIC_BUCKET_SLUG || ''
 const readKey = process.env.COSMIC_READ_KEY || ''
 const writeKey = process.env.COSMIC_WRITE_KEY || ''
 
-// Only validate environment variables when actually needed (not during build)
-function validateEnvironmentVariables() {
-  if (!bucketSlug) {
-    console.error('ERROR: Missing environment variable COSMIC_BUCKET_SLUG')
-    throw new Error('COSMIC_BUCKET_SLUG is required')
+// Validation helper that provides detailed error information
+function validateEnvironmentVariables(): { isValid: boolean; missingVars: string[] } {
+  const missing: string[] = []
+  
+  if (!bucketSlug) missing.push('COSMIC_BUCKET_SLUG')
+  if (!readKey) missing.push('COSMIC_READ_KEY')
+  if (!writeKey && typeof window === 'undefined') missing.push('COSMIC_WRITE_KEY')
+  
+  return {
+    isValid: missing.length === 0,
+    missingVars: missing
   }
-
-  if (!readKey) {
-    console.error('ERROR: Missing environment variable COSMIC_READ_KEY')
-    throw new Error('COSMIC_READ_KEY is required')
-  }
-
-  // Write key is only needed for server-side operations
-  if (!writeKey && typeof window === 'undefined') {
-    console.error('ERROR: Missing environment variable COSMIC_WRITE_KEY')
-    throw new Error('COSMIC_WRITE_KEY is required for server operations')
-  }
-
-  console.log('✓ Environment variables validated:', {
-    bucketSlug: !!bucketSlug,
-    readKey: !!readKey,
-    writeKey: !!writeKey
-  })
 }
 
-// Create client with conditional validation
+// Create client with proper error handling
 let cosmic: ReturnType<typeof createBucketClient>
 
 try {
-  // Only create client if we have the minimum required variables
-  if (bucketSlug && readKey) {
+  const validation = validateEnvironmentVariables()
+  
+  if (validation.isValid && bucketSlug && readKey) {
     cosmic = createBucketClient({
       bucketSlug,
       readKey,
       writeKey: writeKey || undefined,
     })
+    console.log('✓ Cosmic client initialized successfully')
   } else {
     // Create a placeholder client that will throw meaningful errors
     cosmic = {
       objects: {
-        find: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
-        findOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
-        insertOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
-        updateOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+        find: () => { 
+          const validation = validateEnvironmentVariables()
+          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+        },
+        findOne: () => { 
+          const validation = validateEnvironmentVariables()
+          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+        },
+        insertOne: () => { 
+          const validation = validateEnvironmentVariables()
+          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+        },
+        updateOne: () => { 
+          const validation = validateEnvironmentVariables()
+          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+        },
       },
       media: {
-        insertOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+        insertOne: () => { 
+          const validation = validateEnvironmentVariables()
+          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+        },
       }
     } as any
   }
@@ -70,7 +76,11 @@ function hasStatus(error: unknown): error is { status: number } {
 // Conversion jobs functions
 export async function getConversionJobs(): Promise<import('../types').ConversionJob[]> {
   try {
-    validateEnvironmentVariables()
+    const validation = validateEnvironmentVariables()
+    if (!validation.isValid) {
+      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+    }
+    
     const response = await cosmic.objects
       .find({ type: 'conversion-jobs' })
       .props(['id', 'title', 'slug', 'metadata', 'created_at'])
@@ -92,7 +102,11 @@ export async function getConversionJobs(): Promise<import('../types').Conversion
 
 export async function getConversionJob(id: string): Promise<import('../types').ConversionJob | null> {
   try {
-    validateEnvironmentVariables()
+    const validation = validateEnvironmentVariables()
+    if (!validation.isValid) {
+      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+    }
+    
     const response = await cosmic.objects
       .findOne({ id, type: 'conversion-jobs' })
       .depth(1);
@@ -108,7 +122,11 @@ export async function getConversionJob(id: string): Promise<import('../types').C
 
 export async function createConversionJob(jobData: import('../types').CreateConversionJobData): Promise<import('../types').ConversionJob> {
   try {
-    validateEnvironmentVariables()
+    const validation = validateEnvironmentVariables()
+    if (!validation.isValid) {
+      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+    }
+    
     console.log('Creating conversion job with data:', jobData);
     
     const response = await cosmic.objects.insertOne({
@@ -128,7 +146,11 @@ export async function createConversionJob(jobData: import('../types').CreateConv
 
 export async function updateConversionJob(id: string, updates: import('../types').UpdateConversionJobData): Promise<import('../types').ConversionJob> {
   try {
-    validateEnvironmentVariables()
+    const validation = validateEnvironmentVariables()
+    if (!validation.isValid) {
+      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+    }
+    
     console.log('Updating conversion job:', id, 'with updates:', updates);
     
     const response = await cosmic.objects.updateOne(id, {
@@ -146,7 +168,11 @@ export async function updateConversionJob(id: string, updates: import('../types'
 // User settings functions
 export async function getUserSettings(): Promise<import('../types').UserSettings | null> {
   try {
-    validateEnvironmentVariables()
+    const validation = validateEnvironmentVariables()
+    if (!validation.isValid) {
+      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+    }
+    
     const response = await cosmic.objects
       .find({ type: 'user-settings' })
       .props(['id', 'title', 'metadata'])
@@ -164,7 +190,11 @@ export async function getUserSettings(): Promise<import('../types').UserSettings
 // Conversion presets functions
 export async function getConversionPresets(): Promise<import('../types').ConversionPreset[]> {
   try {
-    validateEnvironmentVariables()
+    const validation = validateEnvironmentVariables()
+    if (!validation.isValid) {
+      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+    }
+    
     const response = await cosmic.objects
       .find({ type: 'conversion-presets' })
       .props(['id', 'title', 'metadata']);
@@ -206,24 +236,23 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
   }
 
   // Check environment variables with detailed logging
-  console.log('Checking environment variables:', {
+  const validation = validateEnvironmentVariables()
+  console.log('Environment variables validation:', {
+    isValid: validation.isValid,
+    missingVars: validation.missingVars,
     bucketSlug: !!bucketSlug,
+    readKey: !!readKey,
     writeKey: !!writeKey
   });
 
-  if (!bucketSlug || !writeKey) {
-    console.error('Missing environment variables:', {
-      bucketSlug: !!bucketSlug,
-      writeKey: !!writeKey
-    });
-    throw new Error('Server configuration error: Missing API credentials');
+  if (!validation.isValid) {
+    const errorMessage = `Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set in your .env file.`
+    console.error(errorMessage);
+    throw new Error(errorMessage);
   }
 
   try {
     console.log('Starting Cosmic media upload...');
-    
-    // Validate environment variables before upload
-    validateEnvironmentVariables()
     
     // Use the Cosmic client that's already configured
     const response = await cosmic.media.insertOne({
@@ -335,12 +364,13 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
       }
     }
     
-    // Re-throw specific custom errors
+    // Re-throw specific custom errors (including our environment variable errors)
     if (error instanceof Error) {
       const message = error.message;
       if (message.includes('File size exceeds') ||
           message.includes('Invalid file type') ||
           message.includes('Server configuration error') ||
+          message.includes('Missing environment variables') ||
           message.includes('Upload completed but') ||
           message.includes('Network error:') ||
           message.includes('Upload failed:')) {
