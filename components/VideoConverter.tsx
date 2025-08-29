@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import UploadZone from './UploadZone'
 import VideoPreview from './VideoPreview'
 import ConversionControls from './ConversionControls'
-import { VideoUpload, ConversionJob, ConversionFormat, extractSelectValue, createSelectValue } from '@/types'
+import { VideoUpload, ConversionJob, ConversionFormat, extractSelectValue, createSelectValue, JobStatus } from '@/types'
 import { VideoProcessor } from '@/lib/video-processor'
 import { uploadVideo, createConversionJob } from '@/lib/cosmic'
 import { startVideoConversion } from '@/lib/video-processor'
@@ -147,7 +147,7 @@ export default function VideoConverter() {
                   name: uploadResult.media.name
                 },
                 output_video: null,
-                status: createSelectValue('pending'),
+                status: createSelectValue('pending' as JobStatus),
                 format: createSelectValue('tiktok'),
                 crop_settings: JSON.stringify({
                   position: 'center',
@@ -253,6 +253,11 @@ export default function VideoConverter() {
       ? JSON.parse(currentJob.metadata.crop_settings)
       : currentJob.metadata.crop_settings
 
+    // Ensure we have a valid current crop settings object
+    if (!currentCropSettings || typeof currentCropSettings !== 'object') {
+      return
+    }
+
     setCurrentJob(prev => prev ? {
       ...prev,
       metadata: {
@@ -272,6 +277,11 @@ export default function VideoConverter() {
     const currentCropSettings = typeof currentJob.metadata.crop_settings === 'string' 
       ? JSON.parse(currentJob.metadata.crop_settings)
       : currentJob.metadata.crop_settings
+
+    // Ensure we have a valid current crop settings object
+    if (!currentCropSettings || typeof currentCropSettings !== 'object') {
+      return
+    }
 
     setCurrentJob(prev => prev ? {
       ...prev,
