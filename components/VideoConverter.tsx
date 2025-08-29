@@ -26,6 +26,8 @@ export default function VideoConverter() {
     // Process each file
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
+      if (!file) continue // Add safety check for undefined file
+      
       const uploadIndex = uploads.length + i
 
       try {
@@ -148,40 +150,45 @@ export default function VideoConverter() {
           {uploads.length > 0 && (
             <div className="mt-6 space-y-3">
               <h3 className="text-lg font-semibold text-white">Uploaded Files</h3>
-              {uploads.map((upload, index) => (
-                <div 
-                  key={index} 
-                  className="bg-secondary-800 rounded-lg p-4"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-white truncate">
-                      {upload.file.name}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      upload.status === 'uploaded' 
-                        ? 'bg-green-500/20 text-green-400'
-                        : upload.status === 'error'
-                        ? 'bg-red-500/20 text-red-400' 
-                        : 'bg-blue-500/20 text-blue-400'
-                    }`}>
-                      {upload.status}
-                    </span>
-                  </div>
-                  
-                  {upload.status === 'uploading' && (
-                    <div className="progress-bar">
-                      <div 
-                        className="progress-fill" 
-                        style={{ width: `${upload.progress}%` }}
-                      />
+              {uploads.map((upload, index) => {
+                // Add safety check for undefined file
+                if (!upload.file) return null
+                
+                return (
+                  <div 
+                    key={index} 
+                    className="bg-secondary-800 rounded-lg p-4"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-white truncate">
+                        {upload.file.name}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        upload.status === 'uploaded' 
+                          ? 'bg-green-500/20 text-green-400'
+                          : upload.status === 'error'
+                          ? 'bg-red-500/20 text-red-400' 
+                          : 'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {upload.status}
+                      </span>
                     </div>
-                  )}
-                  
-                  {upload.error && (
-                    <p className="text-red-400 text-xs mt-2">{upload.error}</p>
-                  )}
-                </div>
-              ))}
+                    
+                    {upload.status === 'uploading' && (
+                      <div className="progress-bar">
+                        <div 
+                          className="progress-fill" 
+                          style={{ width: `${upload.progress}%` }}
+                        />
+                      </div>
+                    )}
+                    
+                    {upload.error && (
+                      <p className="text-red-400 text-xs mt-2">{upload.error}</p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

@@ -34,6 +34,7 @@ export default function ConversionControls({
 
   const canStart = job.metadata.status === 'pending' && !isProcessing
   const isComplete = job.metadata.status === 'completed'
+  const currentProgress = job.metadata.progress || 0
 
   return (
     <div className="conversion-controls">
@@ -118,16 +119,16 @@ export default function ConversionControls({
       </div>
 
       {/* Progress Bar */}
-      {(isProcessing || job.metadata.progress > 0) && (
+      {(isProcessing || currentProgress > 0) && (
         <div className="mb-6">
           <div className="flex justify-between text-sm mb-2">
             <span className="text-white">Progress</span>
-            <span className="text-primary-500">{job.metadata.progress || 0}%</span>
+            <span className="text-primary-500">{currentProgress}%</span>
           </div>
           <div className="progress-bar">
             <div 
               className="progress-fill" 
-              style={{ width: `${job.metadata.progress || 0}%` }}
+              style={{ width: `${currentProgress}%` }}
             />
           </div>
         </div>
