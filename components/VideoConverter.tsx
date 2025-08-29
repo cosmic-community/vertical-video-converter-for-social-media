@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import UploadZone from './UploadZone'
 import VideoPreview from './VideoPreview'
 import ConversionControls from './ConversionControls'
@@ -14,8 +14,25 @@ export default function VideoConverter() {
   const [currentJob, setCurrentJob] = useState<ConversionJob | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const updateUploadProgress = useCallback((index: number, progress: number) => {
+    setUploads(prev => prev.map((upload, idx) => 
+      idx === index ? { ...upload, progress } : upload
+    ))
+  }, [])
+
+  const updateUploadStatus = useCallback((index: number, status: VideoUpload['status'], error?: string) => {
+    setUploads(prev => prev.map((upload, idx) => 
+      idx === index ? { ...upload, status, error, progress: status === 'uploaded' ? 100 : upload.progress } : upload
+    ))
+  }, [])
+
   const handleFileUpload = async (files: File[]) => {
-    const newUploads = files.map(file => ({
+    if (!files || files.length === 0) {
+      console.error('No files provided for upload')
+      return
+    }
+
+    const newUploads: VideoUpload[] = files.map(file => ({
       file,
       progress: 0,
       status: 'uploading' as const,
@@ -26,68 +43,80 @@ export default function VideoConverter() {
     // Process each file
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      if (!file) continue // Add safety check for undefined file
+      if (!file) {
+        console.error(`File at index ${i} is undefined`)
+        continue
+      }
       
       const uploadIndex = uploads.length + i
 
       try {
-        // Validate file
+        // Validate file first
         const validation = VideoProcessor.validateVideoFile(file)
         if (!validation.isValid) {
-          setUploads(prev => prev.map((upload, idx) => 
-            idx === uploadIndex 
-              ? { ...upload, status: 'error', error: validation.error }
-              : upload
-          ))
+          updateUploadStatus(uploadIndex, 'error', validation.error)
           continue
         }
 
-        // Upload to Cosmic
+        // Update progress to show upload starting
+        updateUploadProgress(uploadIndex, 10)
+
+        // Upload to Cosmic with progress tracking
         const uploadedMedia = await uploadVideo(file)
         
-        setUploads(prev => prev.map((upload, idx) => 
-          idx === uploadIndex 
-            ? { ...upload, status: 'uploaded', progress: 100 }
-            : upload
-        ))
+        if (!uploadedMedia || !uploadedMedia.media) {
+          throw new Error('Upload failed: No media returned from server')
+        }
 
-        // Create conversion job
+        updateUploadStatus(uploadIndex, 'uploaded')
+
+        // Create conversion job for the first successful upload
         if (!currentJob) {
-          const metadata = await VideoProcessor.getVideoMetadata(file)
-          const aspectRatio = VideoProcessor.getAspectRatio('tiktok')
-          
-          const job = await createConversionJob({
-            title: `Convert ${file.name}`,
-            type: 'conversion-jobs',
-            slug: `convert-${Date.now()}`,
-            metadata: {
-              input_video: uploadedMedia.media,
-              status: 'pending',
-              format: 'tiktok',
-              crop_settings: {
-                position: 'center',
-                smart_crop: true,
-                aspect_ratio: aspectRatio
-              },
-              progress: 0
-            }
-          })
+          try {
+            const metadata = await VideoProcessor.getVideoMetadata(file)
+            const aspectRatio = VideoProcessor.getAspectRatio('tiktok')
+            
+            const job = await createConversionJob({
+              title: `Convert ${file.name}`,
+              type: 'conversion-jobs',
+              slug: `convert-${Date.now()}`,
+              metadata: {
+                input_video: {
+                  id: uploadedMedia.media.id,
+                  url: uploadedMedia.media.url,
+                  imgix_url: uploadedMedia.media.imgix_url || uploadedMedia.media.url,
+                  name: uploadedMedia.media.name || file.name
+                },
+                status: 'pending',
+                format: 'tiktok',
+                crop_settings: {
+                  position: 'center',
+                  smart_crop: true,
+                  aspect_ratio: aspectRatio
+                },
+                progress: 0
+              }
+            })
 
-          setCurrentJob(job)
+            setCurrentJob(job)
+          } catch (jobError) {
+            console.error('Failed to create conversion job:', jobError)
+            updateUploadStatus(uploadIndex, 'error', 'Failed to create conversion job')
+          }
         }
       } catch (error) {
         console.error('Upload error:', error)
-        setUploads(prev => prev.map((upload, idx) => 
-          idx === uploadIndex 
-            ? { ...upload, status: 'error', error: 'Upload failed' }
-            : upload
-        ))
+        const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+        updateUploadStatus(uploadIndex, 'error', errorMessage)
       }
     }
   }
 
   const handleStartConversion = async () => {
-    if (!currentJob) return
+    if (!currentJob) {
+      console.error('No conversion job available')
+      return
+    }
 
     setIsProcessing(true)
     try {
@@ -97,6 +126,7 @@ export default function VideoConverter() {
       }
     } catch (error) {
       console.error('Conversion error:', error)
+      // Show error to user (you might want to add error state)
     } finally {
       setIsProcessing(false)
     }
@@ -135,6 +165,7 @@ export default function VideoConverter() {
   }
 
   const hasUploadedFiles = uploads.some(upload => upload.status === 'uploaded')
+  const isUploading = uploads.some(upload => upload.status === 'uploading')
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -143,7 +174,7 @@ export default function VideoConverter() {
         <div className="lg:col-span-1">
           <UploadZone 
             onUpload={handleFileUpload}
-            isUploading={uploads.some(upload => upload.status === 'uploading')}
+            isUploading={isUploading}
             acceptedFiles={['.mp4', '.mov', '.avi', '.webm']}
           />
           
@@ -152,11 +183,13 @@ export default function VideoConverter() {
               <h3 className="text-lg font-semibold text-white">Uploaded Files</h3>
               {uploads.map((upload, index) => {
                 // Add safety check for undefined file
-                if (!upload.file) return null
+                if (!upload.file) {
+                  return null
+                }
                 
                 return (
                   <div 
-                    key={index} 
+                    key={`${upload.file.name}-${index}`}
                     className="bg-secondary-800 rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-2">

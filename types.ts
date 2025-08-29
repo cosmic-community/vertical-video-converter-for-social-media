@@ -142,8 +142,10 @@ interface UploadZoneProps {
 interface ConversionControlsProps {
   job: ConversionJob;
   onSettingsChange: (settings: Partial<CropSettings>) => void;
+  onFormatChange: (format: ConversionFormat) => void;
   onStartConversion: () => void;
   onCancel: () => void;
+  isProcessing: boolean;
 }
 
 // Utility types

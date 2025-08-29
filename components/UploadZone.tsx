@@ -11,16 +11,25 @@ export default function UploadZone({
   acceptedFiles = ['.mp4', '.mov', '.avi', '.webm'] 
 }: UploadZoneProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    onUpload(acceptedFiles)
+    if (acceptedFiles && acceptedFiles.length > 0) {
+      onUpload(acceptedFiles)
+    }
   }, [onUpload])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'video/*': acceptedFiles
+      'video/mp4': ['.mp4'],
+      'video/quicktime': ['.mov'],
+      'video/x-msvideo': ['.avi'],
+      'video/webm': ['.webm']
     },
     multiple: true,
-    disabled: isUploading
+    disabled: isUploading,
+    maxSize: 500 * 1024 * 1024, // 500MB
+    onError: (error) => {
+      console.error('Dropzone error:', error)
+    }
   })
 
   return (
@@ -65,7 +74,7 @@ export default function UploadZone({
         
         {!isUploading && (
           <div className="mt-6 text-center">
-            <button className="btn-primary">
+            <button type="button" className="btn-primary">
               Choose Files
             </button>
           </div>

@@ -120,6 +120,13 @@ export class VideoProcessor {
   }
 
   static validateVideoFile(file: File): { isValid: boolean; error?: string } {
+    if (!file) {
+      return {
+        isValid: false,
+        error: 'No file provided'
+      };
+    }
+
     const validTypes = [
       'video/mp4',
       'video/quicktime',
@@ -143,6 +150,14 @@ export class VideoProcessor {
       };
     }
 
+    // Check if file is empty
+    if (file.size === 0) {
+      return {
+        isValid: false,
+        error: 'File is empty. Please select a valid video file.'
+      };
+    }
+
     return { isValid: true };
   }
 
@@ -152,6 +167,10 @@ export class VideoProcessor {
     height: number;
     aspectRatio: number;
   }> {
+    if (!file) {
+      throw new Error('No file provided for metadata extraction');
+    }
+
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
       const url = URL.createObjectURL(file);
@@ -159,6 +178,12 @@ export class VideoProcessor {
       video.preload = 'metadata';
       video.onloadedmetadata = () => {
         URL.revokeObjectURL(url);
+        
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          reject(new Error('Invalid video: no video dimensions found'));
+          return;
+        }
+        
         resolve({
           duration: video.duration,
           width: video.videoWidth,
@@ -167,9 +192,33 @@ export class VideoProcessor {
         });
       };
       
-      video.onerror = () => {
+      video.onerror = (event) => {
         URL.revokeObjectURL(url);
-        reject(new Error('Failed to load video metadata'));
+        console.error('Video loading error:', event);
+        reject(new Error('Failed to load video metadata. The file may be corrupted or in an unsupported format.'));
+      };
+      
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Timeout while loading video metadata'));
+      }, 10000); // 10 second timeout
+      
+      video.onloadedmetadata = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(url);
+        
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          reject(new Error('Invalid video: no video dimensions found'));
+          return;
+        }
+        
+        resolve({
+          duration: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight,
+          aspectRatio: video.videoWidth / video.videoHeight
+        });
       };
       
       video.src = url;
@@ -180,6 +229,10 @@ export class VideoProcessor {
 // Mock conversion API (replace with actual server endpoint)
 export async function startVideoConversion(job: ConversionJob): Promise<{ success: boolean; error?: string }> {
   try {
+    if (!job || !job.id) {
+      throw new Error('Invalid job data provided');
+    }
+
     // This would typically call your server-side video processing API
     const response = await fetch('/api/convert-video', {
       method: 'POST',
@@ -195,7 +248,8 @@ export async function startVideoConversion(job: ConversionJob): Promise<{ succes
     });
 
     if (!response.ok) {
-      throw new Error('Conversion request failed');
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
     const result = await response.json();

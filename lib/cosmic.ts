@@ -109,17 +109,54 @@ export async function getConversionPresets(): Promise<import('../types').Convers
   }
 }
 
-// File upload function
+// File upload function with proper error handling
 export async function uploadVideo(file: File, folder: string = 'videos') {
+  if (!file) {
+    throw new Error('No file provided for upload');
+  }
+
+  // Validate file size
+  const maxSize = 500 * 1024 * 1024; // 500MB
+  if (file.size > maxSize) {
+    throw new Error('File size exceeds 500MB limit');
+  }
+
+  // Validate file type
+  const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+  if (!validTypes.includes(file.type)) {
+    throw new Error('Invalid file type. Only MP4, MOV, AVI, and WebM files are supported');
+  }
+
   try {
     const media = await cosmic.media.insertOne({
       media: file,
       folder: folder
     });
     
+    if (!media || !media.media) {
+      throw new Error('Upload failed: No media returned from server');
+    }
+    
     return media;
   } catch (error) {
     console.error('Error uploading video:', error);
-    throw new Error('Failed to upload video');
+    
+    // Handle specific Cosmic API errors
+    if (hasStatus(error)) {
+      switch (error.status) {
+        case 413:
+          throw new Error('File too large. Maximum size is 500MB.');
+        case 415:
+          throw new Error('Unsupported file type. Please use MP4, MOV, AVI, or WebM.');
+        case 403:
+          throw new Error('Upload permission denied. Check your API keys.');
+        case 429:
+          throw new Error('Too many uploads. Please wait a moment and try again.');
+        default:
+          throw new Error(`Upload failed with status ${error.status}`);
+      }
+    }
+    
+    throw new Error('Failed to upload video. Please try again.');
   }
 }
