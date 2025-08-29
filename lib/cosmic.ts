@@ -1,9 +1,35 @@
 import { createBucketClient } from '@cosmicjs/sdk'
 
+// Validate environment variables at startup
+const bucketSlug = process.env.COSMIC_BUCKET_SLUG
+const readKey = process.env.COSMIC_READ_KEY
+const writeKey = process.env.COSMIC_WRITE_KEY
+
+if (!bucketSlug) {
+  console.error('ERROR: Missing environment variable COSMIC_BUCKET_SLUG')
+  throw new Error('COSMIC_BUCKET_SLUG is required')
+}
+
+if (!readKey) {
+  console.error('ERROR: Missing environment variable COSMIC_READ_KEY')
+  throw new Error('COSMIC_READ_KEY is required')
+}
+
+if (!writeKey) {
+  console.error('ERROR: Missing environment variable COSMIC_WRITE_KEY')
+  throw new Error('COSMIC_WRITE_KEY is required')
+}
+
+console.log('✓ Environment variables validated:', {
+  bucketSlug: !!bucketSlug,
+  readKey: !!readKey,
+  writeKey: !!writeKey
+})
+
 export const cosmic = createBucketClient({
-  bucketSlug: process.env.COSMIC_BUCKET_SLUG as string,
-  readKey: process.env.COSMIC_READ_KEY as string,
-  writeKey: process.env.COSMIC_WRITE_KEY as string,
+  bucketSlug,
+  readKey,
+  writeKey,
 })
 
 // Error handling helper
@@ -143,11 +169,16 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     throw new Error('Invalid file type. Only MP4, MOV, AVI, and WebM files are supported');
   }
 
-  // Check environment variables
-  if (!process.env.COSMIC_BUCKET_SLUG || !process.env.COSMIC_WRITE_KEY) {
+  // Check environment variables with detailed logging
+  console.log('Checking environment variables:', {
+    bucketSlug: !!bucketSlug,
+    writeKey: !!writeKey
+  });
+
+  if (!bucketSlug || !writeKey) {
     console.error('Missing environment variables:', {
-      bucketSlug: !!process.env.COSMIC_BUCKET_SLUG,
-      writeKey: !!process.env.COSMIC_WRITE_KEY
+      bucketSlug: !!bucketSlug,
+      writeKey: !!writeKey
     });
     throw new Error('Server configuration error: Missing API credentials');
   }
