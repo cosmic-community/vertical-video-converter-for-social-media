@@ -13,27 +13,50 @@ export default function VideoConverter() {
   const [uploads, setUploads] = useState<VideoUpload[]>([])
   const [currentJob, setCurrentJob] = useState<ConversionJob | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const updateUploadProgress = useCallback((index: number, progress: number) => {
     setUploads(prev => prev.map((upload, idx) => 
-      idx === index ? { ...upload, progress } : upload
+      idx === index ? { ...upload, progress: Math.min(100, Math.max(0, progress)) } : upload
     ))
   }, [])
 
   const updateUploadStatus = useCallback((index: number, status: VideoUpload['status'], error?: string) => {
     setUploads(prev => prev.map((upload, idx) => 
-      idx === index ? { ...upload, status, error, progress: status === 'uploaded' ? 100 : upload.progress } : upload
+      idx === index ? { 
+        ...upload, 
+        status, 
+        error, 
+        progress: status === 'uploaded' ? 100 : upload.progress 
+      } : upload
     ))
   }, [])
 
+  const generateUniqueSlug = (fileName: string): string => {
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const baseName = fileName.replace(/\.[^/.]+$/, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    return `convert-${baseName}-${timestamp}-${randomSuffix}`;
+  }
+
   const handleFileUpload = async (files: File[]) => {
+    // Clear previous upload error
+    setUploadError(null)
+    
     if (!files || files.length === 0) {
       console.error('No files provided for upload')
+      setUploadError('No files selected for upload')
       return
     }
 
-    console.log('Starting upload process for files:', files.map(f => f?.name || 'unknown'))
+    console.log('=== Starting Video Upload Process ===')
+    console.log('Files to process:', files.map(f => ({
+      name: f?.name || 'unnamed',
+      size: f?.size || 0,
+      type: f?.type || 'unknown'
+    })))
 
+    // Create upload records for UI tracking
     const newUploads: VideoUpload[] = files.map(file => ({
       file,
       progress: 0,
@@ -41,87 +64,150 @@ export default function VideoConverter() {
     }))
 
     setUploads(prev => [...prev, ...newUploads])
+    const startIndex = uploads.length
 
-    // Process each file
+    // Process each file sequentially
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
+      const uploadIndex = startIndex + i
+
       if (!file) {
-        console.error(`File at index ${i} is undefined`)
+        console.error(`File at index ${i} is null or undefined`)
+        updateUploadStatus(uploadIndex, 'error', 'Invalid file')
         continue
       }
-      
-      const uploadIndex = uploads.length + i
 
       try {
-        console.log(`Processing file ${i + 1}/${files.length}:`, file.name)
+        console.log(`--- Processing File ${i + 1}/${files.length}: ${file.name} ---`)
         
-        // Validate file first
+        // Step 1: Validate file
+        console.log('Step 1: Validating file...')
         const validation = VideoProcessor.validateVideoFile(file)
         if (!validation.isValid) {
           console.error('File validation failed:', validation.error)
           updateUploadStatus(uploadIndex, 'error', validation.error)
           continue
         }
+        console.log('✓ File validation passed')
 
-        // Update progress to show upload starting
-        updateUploadProgress(uploadIndex, 10)
+        // Step 2: Start upload progress indicator
+        updateUploadProgress(uploadIndex, 5)
 
-        // Upload to Cosmic
-        console.log('Starting upload to Cosmic for:', file.name)
-        const uploadResult = await uploadVideo(file)
-        
-        console.log('Upload result:', uploadResult)
-        
-        // Simple validation - just check if we got a result with media
-        if (!uploadResult?.media?.id || !uploadResult?.media?.url) {
-          throw new Error('Upload failed: Invalid response from server')
+        // Step 3: Get video metadata for job creation
+        console.log('Step 3: Extracting video metadata...')
+        let metadata;
+        try {
+          metadata = await VideoProcessor.getVideoMetadata(file)
+          console.log('✓ Video metadata extracted:', metadata)
+        } catch (metadataError) {
+          console.warn('Failed to extract metadata, using defaults:', metadataError)
+          metadata = {
+            duration: 0,
+            width: 1920,
+            height: 1080,
+            aspectRatio: 16/9
+          }
         }
+        
+        updateUploadProgress(uploadIndex, 15)
 
-        console.log('Upload successful, updating status')
+        // Step 4: Upload to Cosmic
+        console.log('Step 4: Uploading to Cosmic CMS...')
+        const uploadResult = await uploadVideo(file, 'conversion-videos')
+        
+        console.log('✓ Upload successful:', {
+          mediaId: uploadResult.media.id,
+          mediaUrl: uploadResult.media.url,
+          mediaName: uploadResult.media.name
+        })
+        
+        updateUploadProgress(uploadIndex, 80)
+
+        // Step 5: Mark upload as completed
         updateUploadStatus(uploadIndex, 'uploaded')
+        console.log('✓ Upload status updated to completed')
 
-        // Create conversion job for the first successful upload
+        // Step 6: Create conversion job (only for the first successful upload)
         if (!currentJob) {
+          console.log('Step 6: Creating conversion job...')
+          
           try {
-            console.log('Creating conversion job for first successful upload')
-            const metadata = await VideoProcessor.getVideoMetadata(file)
             const aspectRatio = VideoProcessor.getAspectRatio('tiktok')
+            const uniqueSlug = generateUniqueSlug(file.name)
             
             const jobData = {
               title: `Convert ${file.name}`,
               type: 'conversion-jobs' as const,
-              slug: `convert-${Date.now()}`,
+              slug: uniqueSlug,
               metadata: {
                 input_video: {
                   id: uploadResult.media.id,
                   url: uploadResult.media.url,
-                  imgix_url: uploadResult.media.imgix_url || uploadResult.media.url,
-                  name: uploadResult.media.name || file.name
+                  imgix_url: uploadResult.media.imgix_url,
+                  name: uploadResult.media.name
                 },
-                status: 'pending' as const,
-                format: 'tiktok' as ConversionFormat,
-                crop_settings: {
-                  position: 'center' as const,
+                output_video: null,
+                status: {
+                  key: 'pending',
+                  value: 'pending'
+                },
+                format: {
+                  key: 'tiktok',
+                  value: 'tiktok'
+                },
+                crop_settings: JSON.stringify({
+                  position: 'center',
                   smart_crop: true,
                   aspect_ratio: aspectRatio
-                },
-                progress: 0
+                }),
+                progress: 0,
+                error_message: null,
+                processing_started_at: null,
+                processing_completed_at: null
               }
             }
 
             console.log('Creating conversion job with data:', jobData)
             const job = await createConversionJob(jobData)
-            console.log('Conversion job created successfully:', job)
-
-            setCurrentJob(job)
+            
+            // Convert the response to match our expected format
+            const formattedJob: ConversionJob = {
+              ...job,
+              metadata: {
+                input_video: job.metadata.input_video,
+                output_video: job.metadata.output_video,
+                status: job.metadata.status?.key || job.metadata.status || 'pending',
+                format: job.metadata.format?.key || job.metadata.format || 'tiktok',
+                crop_settings: typeof job.metadata.crop_settings === 'string' 
+                  ? JSON.parse(job.metadata.crop_settings)
+                  : job.metadata.crop_settings || {
+                    position: 'center',
+                    smart_crop: true,
+                    aspect_ratio: aspectRatio
+                  },
+                progress: job.metadata.progress || 0,
+                error_message: job.metadata.error_message,
+                processing_started_at: job.metadata.processing_started_at,
+                processing_completed_at: job.metadata.processing_completed_at
+              }
+            }
+            
+            setCurrentJob(formattedJob)
+            console.log('✓ Conversion job created successfully:', formattedJob.id)
+            
           } catch (jobError) {
             console.error('Failed to create conversion job:', jobError)
-            const jobErrorMessage = jobError instanceof Error ? jobError.message : 'Failed to create conversion job'
-            updateUploadStatus(uploadIndex, 'error', `Upload successful but ${jobErrorMessage}`)
+            const errorMessage = jobError instanceof Error ? jobError.message : 'Failed to create conversion job'
+            // Don't mark upload as failed, just show a warning that job creation failed
+            console.warn(`Upload successful but job creation failed: ${errorMessage}`)
           }
         }
+        
+        updateUploadProgress(uploadIndex, 100)
+        console.log(`✓ File ${i + 1} processing completed successfully`)
+
       } catch (error) {
-        console.error(`Upload error for file ${file.name}:`, error)
+        console.error(`❌ Upload failed for file ${file.name}:`, error)
         
         let errorMessage = 'Upload failed'
         if (error instanceof Error) {
@@ -131,8 +217,15 @@ export default function VideoConverter() {
         }
         
         updateUploadStatus(uploadIndex, 'error', errorMessage)
+        
+        // Set global error for user feedback
+        if (!uploadError) {
+          setUploadError(errorMessage)
+        }
       }
     }
+    
+    console.log('=== Upload Process Completed ===')
   }
 
   const handleStartConversion = async () => {
@@ -153,7 +246,7 @@ export default function VideoConverter() {
       console.log('Video conversion started successfully')
     } catch (error) {
       console.error('Conversion error:', error)
-      // Show error to user (you might want to add error state)
+      setUploadError(error instanceof Error ? error.message : 'Conversion failed')
     } finally {
       setIsProcessing(false)
     }
@@ -196,6 +289,21 @@ export default function VideoConverter() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Error Display */}
+      {uploadError && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-red-400">{uploadError}</p>
+            <button
+              onClick={() => setUploadError(null)}
+              className="text-red-400 hover:text-red-300"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Upload Zone */}
         <div className="lg:col-span-1">
@@ -207,9 +315,8 @@ export default function VideoConverter() {
           
           {uploads.length > 0 && (
             <div className="mt-6 space-y-3">
-              <h3 className="text-lg font-semibold text-white">Uploaded Files</h3>
+              <h3 className="text-lg font-semibold text-white">Upload Progress</h3>
               {uploads.map((upload, index) => {
-                // Add safety check for undefined file
                 if (!upload.file) {
                   return null
                 }
@@ -220,31 +327,46 @@ export default function VideoConverter() {
                     className="bg-secondary-800 rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-white truncate">
+                      <span className="text-sm text-white truncate max-w-[200px]">
                         {upload.file.name}
                       </span>
-                      <span className={`text-xs px-2 py-1 rounded ${
+                      <span className={`text-xs px-2 py-1 rounded font-medium ${
                         upload.status === 'uploaded' 
                           ? 'bg-green-500/20 text-green-400'
                           : upload.status === 'error'
                           ? 'bg-red-500/20 text-red-400' 
                           : 'bg-blue-500/20 text-blue-400'
                       }`}>
-                        {upload.status}
+                        {upload.status === 'uploaded' ? 'Complete' : 
+                         upload.status === 'error' ? 'Failed' : 
+                         'Uploading'}
                       </span>
                     </div>
                     
                     {upload.status === 'uploading' && (
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill" 
-                          style={{ width: `${upload.progress}%` }}
-                        />
+                      <div className="mb-2">
+                        <div className="progress-bar">
+                          <div 
+                            className="progress-fill" 
+                            style={{ width: `${upload.progress}%` }}
+                          />
+                        </div>
+                        <div className="text-xs text-secondary-300 mt-1">
+                          {upload.progress}% completed
+                        </div>
                       </div>
                     )}
                     
                     {upload.error && (
-                      <p className="text-red-400 text-xs mt-2">{upload.error}</p>
+                      <p className="text-red-400 text-xs mt-2 bg-red-500/10 p-2 rounded">
+                        {upload.error}
+                      </p>
+                    )}
+                    
+                    {upload.status === 'uploaded' && (
+                      <p className="text-green-400 text-xs mt-2">
+                        ✓ Successfully uploaded to database
+                      </p>
                     )}
                   </div>
                 )

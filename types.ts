@@ -10,7 +10,7 @@ interface CosmicObject {
   modified_at: string;
 }
 
-// Conversion job object
+// Conversion job object - matches the CMS structure
 interface ConversionJob extends CosmicObject {
   type: 'conversion-jobs';
   metadata: {
@@ -25,14 +25,14 @@ interface ConversionJob extends CosmicObject {
       url: string;
       imgix_url: string;
       name: string;
-    };
-    status: JobStatus;
-    format: ConversionFormat;
-    crop_settings: CropSettings;
+    } | null;
+    status: JobStatus | { key: JobStatus; value: JobStatus };
+    format: ConversionFormat | { key: ConversionFormat; value: ConversionFormat };
+    crop_settings: CropSettings | string; // Can be JSON string from CMS
     progress?: number;
-    error_message?: string;
-    processing_started_at?: string;
-    processing_completed_at?: string;
+    error_message?: string | null;
+    processing_started_at?: string | null;
+    processing_completed_at?: string | null;
   };
 }
 
@@ -40,10 +40,10 @@ interface ConversionJob extends CosmicObject {
 interface UserSettings extends CosmicObject {
   type: 'user-settings';
   metadata: {
-    default_format: ConversionFormat;
+    default_format: ConversionFormat | { key: ConversionFormat; value: ConversionFormat };
     auto_crop_enabled: boolean;
-    quality_preset: QualityPreset;
-    preferred_position: CropPosition;
+    quality_preset: QualityPreset | { key: QualityPreset; value: QualityPreset };
+    preferred_position: CropPosition | { key: CropPosition; value: CropPosition };
     batch_processing_enabled: boolean;
   };
 }
@@ -54,14 +54,14 @@ interface ConversionPreset extends CosmicObject {
   metadata: {
     name: string;
     description?: string;
-    format: ConversionFormat;
-    crop_settings: CropSettings;
-    quality_settings: QualitySettings;
+    format: ConversionFormat | { key: ConversionFormat; value: ConversionFormat };
+    crop_settings: CropSettings | string; // Can be JSON string from CMS
+    quality_settings: QualitySettings | string; // Can be JSON string from CMS
     is_default: boolean;
   };
 }
 
-// Type literals for select-dropdown values
+// Type literals for select-dropdown values - matching CMS values exactly
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 type ConversionFormat = 'tiktok' | 'instagram-reel' | 'instagram-story' | 'custom';
 type CropPosition = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'smart';
@@ -148,9 +148,49 @@ interface ConversionControlsProps {
   isProcessing: boolean;
 }
 
-// Utility types
-type CreateConversionJobData = Omit<ConversionJob, 'id' | 'created_at' | 'modified_at'>;
-type UpdateConversionJobData = Partial<ConversionJob['metadata']>;
+// Utility types for creating and updating records
+type CreateConversionJobData = {
+  title: string;
+  type: 'conversion-jobs';
+  slug: string;
+  metadata: {
+    input_video: {
+      id: string;
+      url: string;
+      imgix_url: string;
+      name: string;
+    };
+    output_video?: {
+      id: string;
+      url: string;
+      imgix_url: string;
+      name: string;
+    } | null;
+    status: { key: JobStatus; value: JobStatus };
+    format: { key: ConversionFormat; value: ConversionFormat };
+    crop_settings: string; // JSON string for CMS compatibility
+    progress?: number;
+    error_message?: string | null;
+    processing_started_at?: string | null;
+    processing_completed_at?: string | null;
+  };
+};
+
+type UpdateConversionJobData = Partial<{
+  status: JobStatus | { key: JobStatus; value: JobStatus };
+  format: ConversionFormat | { key: ConversionFormat; value: ConversionFormat };
+  crop_settings: string; // JSON string for CMS compatibility
+  progress: number;
+  error_message: string | null;
+  processing_started_at: string | null;
+  processing_completed_at: string | null;
+  output_video: {
+    id: string;
+    url: string;
+    imgix_url: string;
+    name: string;
+  } | null;
+}>;
 
 // Type guards
 function isConversionJob(obj: CosmicObject): obj is ConversionJob {
@@ -163,6 +203,18 @@ function isUserSettings(obj: CosmicObject): obj is UserSettings {
 
 function isConversionPreset(obj: CosmicObject): obj is ConversionPreset {
   return obj.type === 'conversion-presets';
+}
+
+// Utility functions for handling CMS select-dropdown values
+function extractSelectValue<T>(value: T | { key: T; value: T }): T {
+  if (typeof value === 'object' && value !== null && 'key' in value) {
+    return (value as { key: T; value: T }).key;
+  }
+  return value as T;
+}
+
+function createSelectValue<T>(value: T): { key: T; value: T } {
+  return { key: value, value: value };
 }
 
 export type {
@@ -191,4 +243,6 @@ export {
   isConversionJob,
   isUserSettings,
   isConversionPreset,
+  extractSelectValue,
+  createSelectValue,
 };
