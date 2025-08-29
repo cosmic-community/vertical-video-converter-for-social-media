@@ -23,44 +23,32 @@ function validateEnvironmentVariables(): { isValid: boolean; missingVars: string
 let cosmic: ReturnType<typeof createBucketClient>
 
 try {
-  const validation = validateEnvironmentVariables()
-  
-  if (validation.isValid && bucketSlug && readKey) {
-    cosmic = createBucketClient({
-      bucketSlug,
-      readKey,
-      writeKey: writeKey || undefined,
-    })
-    console.log('✓ Cosmic client initialized successfully with bucket:', bucketSlug)
+  // For server-side operations, ensure all credentials are available
+  if (typeof window === 'undefined') {
+    // Server-side - requires all credentials
+    if (bucketSlug && readKey && writeKey) {
+      cosmic = createBucketClient({
+        bucketSlug,
+        readKey,
+        writeKey,
+      })
+      console.log('✓ Server Cosmic client initialized successfully with bucket:', bucketSlug)
+    } else {
+      console.error('❌ Server environment validation failed - missing credentials')
+      throw new Error(`Server configuration error: Missing API credentials. Please ensure COSMIC_BUCKET_SLUG, COSMIC_READ_KEY, and COSMIC_WRITE_KEY are all set in your environment variables.`)
+    }
   } else {
-    console.error('❌ Environment validation failed:', validation.missingVars)
-    // Create a placeholder client that will throw meaningful errors
-    cosmic = {
-      objects: {
-        find: () => { 
-          const validation = validateEnvironmentVariables()
-          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
-        },
-        findOne: () => { 
-          const validation = validateEnvironmentVariables()
-          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
-        },
-        insertOne: () => { 
-          const validation = validateEnvironmentVariables()
-          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
-        },
-        updateOne: () => { 
-          const validation = validateEnvironmentVariables()
-          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
-        },
-      },
-      media: {
-        insertOne: () => { 
-          const validation = validateEnvironmentVariables()
-          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
-        },
-      }
-    } as any
+    // Client-side - only needs read key
+    if (bucketSlug && readKey) {
+      cosmic = createBucketClient({
+        bucketSlug,
+        readKey,
+      })
+      console.log('✓ Client Cosmic client initialized successfully')
+    } else {
+      console.error('❌ Client environment validation failed')
+      throw new Error(`Client configuration error: Missing API credentials. Please ensure COSMIC_BUCKET_SLUG and COSMIC_READ_KEY are available.`)
+    }
   }
 } catch (error) {
   console.error('Failed to initialize Cosmic client:', error)
@@ -77,11 +65,6 @@ function hasStatus(error: unknown): error is { status: number } {
 // Conversion jobs functions
 export async function getConversionJobs(): Promise<import('../types').ConversionJob[]> {
   try {
-    const validation = validateEnvironmentVariables()
-    if (!validation.isValid) {
-      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
-    }
-    
     console.log('Fetching conversion jobs from bucket:', bucketSlug)
     const response = await cosmic.objects
       .find({ type: 'conversion-jobs' })
@@ -107,11 +90,6 @@ export async function getConversionJobs(): Promise<import('../types').Conversion
 
 export async function getConversionJob(id: string): Promise<import('../types').ConversionJob | null> {
   try {
-    const validation = validateEnvironmentVariables()
-    if (!validation.isValid) {
-      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
-    }
-    
     const response = await cosmic.objects
       .findOne({ id, type: 'conversion-jobs' })
       .depth(1);
@@ -127,11 +105,6 @@ export async function getConversionJob(id: string): Promise<import('../types').C
 
 export async function createConversionJob(jobData: import('../types').CreateConversionJobData): Promise<import('../types').ConversionJob> {
   try {
-    const validation = validateEnvironmentVariables()
-    if (!validation.isValid) {
-      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
-    }
-    
     console.log('Creating conversion job with data:', {
       type: jobData.type,
       title: jobData.title,
@@ -156,11 +129,6 @@ export async function createConversionJob(jobData: import('../types').CreateConv
 
 export async function updateConversionJob(id: string, updates: import('../types').UpdateConversionJobData): Promise<import('../types').ConversionJob> {
   try {
-    const validation = validateEnvironmentVariables()
-    if (!validation.isValid) {
-      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
-    }
-    
     console.log('Updating conversion job:', id, 'with updates:', Object.keys(updates));
     
     const response = await cosmic.objects.updateOne(id, {
@@ -178,11 +146,6 @@ export async function updateConversionJob(id: string, updates: import('../types'
 // User settings functions
 export async function getUserSettings(): Promise<import('../types').UserSettings | null> {
   try {
-    const validation = validateEnvironmentVariables()
-    if (!validation.isValid) {
-      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
-    }
-    
     const response = await cosmic.objects
       .find({ type: 'user-settings' })
       .props(['id', 'title', 'metadata'])
@@ -200,11 +163,6 @@ export async function getUserSettings(): Promise<import('../types').UserSettings
 // Conversion presets functions
 export async function getConversionPresets(): Promise<import('../types').ConversionPreset[]> {
   try {
-    const validation = validateEnvironmentVariables()
-    if (!validation.isValid) {
-      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
-    }
-    
     const response = await cosmic.objects
       .find({ type: 'conversion-presets' })
       .props(['id', 'title', 'metadata']);
@@ -251,20 +209,25 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     throw new Error(error);
   }
 
-  // Check environment variables with detailed logging
-  const validation = validateEnvironmentVariables()
-  console.log('🔑 Environment variables check:', {
-    isValid: validation.isValid,
-    missingVars: validation.missingVars,
-    bucketSlug: bucketSlug ? '✓ Set' : '❌ Missing',
-    readKey: readKey ? '✓ Set' : '❌ Missing',
-    writeKey: writeKey ? '✓ Set' : '❌ Missing'
-  });
+  // Server-side environment validation
+  if (typeof window === 'undefined') {
+    // Check server environment variables
+    console.log('🔑 Server environment variables check:', {
+      bucketSlug: bucketSlug ? '✓ Set' : '❌ Missing',
+      readKey: readKey ? '✓ Set' : '❌ Missing', 
+      writeKey: writeKey ? '✓ Set' : '❌ Missing'
+    });
 
-  if (!validation.isValid) {
-    const errorMessage = `Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are properly configured in your deployment settings.`
-    console.error('❌', errorMessage);
-    throw new Error(errorMessage);
+    if (!bucketSlug || !readKey || !writeKey) {
+      const missingVars = [];
+      if (!bucketSlug) missingVars.push('COSMIC_BUCKET_SLUG');
+      if (!readKey) missingVars.push('COSMIC_READ_KEY');
+      if (!writeKey) missingVars.push('COSMIC_WRITE_KEY');
+      
+      const errorMessage = `Server configuration error: Missing API credentials (${missingVars.join(', ')}). Please ensure all required environment variables are properly configured in your deployment settings.`;
+      console.error('❌', errorMessage);
+      throw new Error(errorMessage);
+    }
   }
 
   try {
@@ -389,13 +352,12 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
       }
     }
     
-    // Re-throw specific custom errors (including our environment variable errors)
+    // Re-throw specific custom errors
     if (error instanceof Error) {
       const message = error.message;
       if (message.includes('File size exceeds') ||
           message.includes('Invalid file type') ||
           message.includes('Server configuration error') ||
-          message.includes('Missing environment variables') ||
           message.includes('Upload completed but') ||
           message.includes('Network error:') ||
           message.includes('Upload failed:')) {
