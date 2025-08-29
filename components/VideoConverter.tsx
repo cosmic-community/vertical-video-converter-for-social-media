@@ -62,10 +62,15 @@ export default function VideoConverter() {
         updateUploadProgress(uploadIndex, 10)
 
         // Upload to Cosmic with progress tracking
-        const uploadedMedia = await uploadVideo(file)
+        console.log('Starting upload for file:', file.name)
+        const uploadResult = await uploadVideo(file)
         
-        if (!uploadedMedia || !uploadedMedia.media) {
-          throw new Error('Upload failed: No media returned from server')
+        console.log('Upload result:', uploadResult)
+        
+        // Check if upload was successful and has the expected structure
+        if (!uploadResult || !uploadResult.media) {
+          console.error('Invalid upload result structure:', uploadResult)
+          throw new Error('Upload failed: Invalid response from server')
         }
 
         updateUploadStatus(uploadIndex, 'uploaded')
@@ -82,10 +87,10 @@ export default function VideoConverter() {
               slug: `convert-${Date.now()}`,
               metadata: {
                 input_video: {
-                  id: uploadedMedia.media.id,
-                  url: uploadedMedia.media.url,
-                  imgix_url: uploadedMedia.media.imgix_url || uploadedMedia.media.url,
-                  name: uploadedMedia.media.name || file.name
+                  id: uploadResult.media.id,
+                  url: uploadResult.media.url,
+                  imgix_url: uploadResult.media.imgix_url || uploadResult.media.url,
+                  name: uploadResult.media.name || file.name
                 },
                 status: 'pending',
                 format: 'tiktok',

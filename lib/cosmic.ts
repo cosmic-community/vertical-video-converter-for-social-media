@@ -109,7 +109,7 @@ export async function getConversionPresets(): Promise<import('../types').Convers
   }
 }
 
-// File upload function with proper error handling
+// File upload function with proper error handling and correct response structure
 export async function uploadVideo(file: File, folder: string = 'videos') {
   if (!file) {
     throw new Error('No file provided for upload');
@@ -128,16 +128,22 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
   }
 
   try {
-    const media = await cosmic.media.insertOne({
+    console.log('Uploading file:', file.name, 'Size:', file.size);
+    
+    const response = await cosmic.media.insertOne({
       media: file,
       folder: folder
     });
     
-    if (!media || !media.media) {
-      throw new Error('Upload failed: No media returned from server');
+    console.log('Upload response:', response);
+    
+    // The Cosmic API returns the media object directly, not wrapped in a 'data' property
+    if (!response || !response.media) {
+      console.error('Invalid response structure:', response);
+      throw new Error('Upload failed: Invalid response from server');
     }
     
-    return media;
+    return response;
   } catch (error) {
     console.error('Error uploading video:', error);
     
@@ -155,6 +161,11 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
         default:
           throw new Error(`Upload failed with status ${error.status}`);
       }
+    }
+    
+    // Handle network errors or other issues
+    if (error instanceof TypeError) {
+      throw new Error('Network error. Please check your internet connection and try again.');
     }
     
     throw new Error('Failed to upload video. Please try again.');
