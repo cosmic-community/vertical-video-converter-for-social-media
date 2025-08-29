@@ -109,7 +109,7 @@ export async function getConversionPresets(): Promise<import('../types').Convers
   }
 }
 
-// File upload function with improved error handling
+// File upload function with comprehensive error handling and response validation
 export async function uploadVideo(file: File, folder: string = 'videos') {
   if (!file) {
     throw new Error('No file provided for upload');
@@ -128,48 +128,89 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
   }
 
   try {
-    console.log('Uploading file:', file.name, 'Size:', file.size);
+    console.log('Starting upload for file:', file.name, 'Size:', file.size, 'Type:', file.type);
     
-    // Add timeout to the upload request
+    // Create upload promise with timeout
     const uploadPromise = cosmic.media.insertOne({
       media: file,
       folder: folder
     });
     
-    const timeoutPromise = new Promise((_, reject) => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Upload timeout after 60 seconds')), 60000);
     });
     
     const response = await Promise.race([uploadPromise, timeoutPromise]);
     
-    console.log('Upload response:', response);
+    console.log('Raw upload response:', response);
+    console.log('Response type:', typeof response);
+    console.log('Response keys:', response ? Object.keys(response) : 'no keys');
     
-    // Validate response structure more thoroughly
+    // Comprehensive response validation
     if (!response) {
       console.error('No response received from upload');
       throw new Error('Upload failed: No response from server');
     }
     
     if (typeof response !== 'object') {
-      console.error('Invalid response type:', typeof response);
+      console.error('Invalid response type:', typeof response, response);
       throw new Error('Upload failed: Invalid response format');
     }
     
-    if (!('media' in response) || !response.media) {
-      console.error('Invalid response structure - missing media:', response);
-      throw new Error('Upload failed: Invalid response structure');
+    // Check for different possible response structures from Cosmic API
+    let mediaObject = null;
+    
+    // Check for response.media first (most common structure)
+    if ('media' in response && response.media) {
+      mediaObject = response.media;
+      console.log('Found media in response.media:', mediaObject);
+    }
+    // Check for response.object (alternative structure)
+    else if ('object' in response && response.object) {
+      mediaObject = response.object;
+      console.log('Found media in response.object:', mediaObject);
+    }
+    // Check if response itself is the media object
+    else if ('id' in response && 'url' in response) {
+      mediaObject = response;
+      console.log('Response itself appears to be the media object:', mediaObject);
+    }
+    // Check for response.data (another possible structure)
+    else if ('data' in response && response.data) {
+      mediaObject = response.data;
+      console.log('Found media in response.data:', mediaObject);
+    }
+    
+    if (!mediaObject) {
+      console.error('No media object found in response structure:', response);
+      throw new Error('Upload failed: Invalid response structure - no media object found');
     }
     
     // Validate media object has required properties
-    const media = response.media;
-    if (!media.id || !media.url) {
-      console.error('Invalid media object:', media);
-      throw new Error('Upload failed: Incomplete media information');
+    if (typeof mediaObject !== 'object') {
+      console.error('Media object is not an object:', typeof mediaObject, mediaObject);
+      throw new Error('Upload failed: Invalid media object type');
     }
     
-    return response;
+    if (!('id' in mediaObject) || !mediaObject.id) {
+      console.error('Media object missing id:', mediaObject);
+      throw new Error('Upload failed: Media object missing ID');
+    }
+    
+    if (!('url' in mediaObject) || !mediaObject.url) {
+      console.error('Media object missing url:', mediaObject);
+      throw new Error('Upload failed: Media object missing URL');
+    }
+    
+    console.log('Upload successful, media object:', mediaObject);
+    
+    // Return in consistent format regardless of original response structure
+    return {
+      media: mediaObject
+    };
+    
   } catch (error) {
-    console.error('Error uploading video:', error);
+    console.error('Upload error details:', error);
     
     // Handle timeout errors specifically
     if (error instanceof Error && error.message.includes('timeout')) {
@@ -178,12 +219,11 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     
     // Handle fetch/network errors
     if (error instanceof TypeError) {
-      // Check for specific network error patterns
       const errorMessage = error.message.toLowerCase();
       if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('failed to fetch')) {
         throw new Error('Network error. Please check your internet connection and try again.');
       }
-      if (errorMessage.includes('cannot read properties of undefined')) {
+      if (errorMessage.includes('cannot read properties')) {
         throw new Error('Upload failed due to invalid response. Please try again.');
       }
       throw new Error('Network error. Please check your internet connection and try again.');
@@ -198,6 +238,8 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
           throw new Error('Unsupported file type. Please use MP4, MOV, AVI, or WebM.');
         case 403:
           throw new Error('Upload permission denied. Check your API keys.');
+        case 401:
+          throw new Error('Authentication failed. Check your API keys.');
         case 429:
           throw new Error('Too many uploads. Please wait a moment and try again.');
         case 500:
@@ -212,8 +254,15 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     
     // Handle other error types
     if (error instanceof Error) {
-      // Don't expose internal error details, but log them
-      console.error('Upload error details:', error.stack);
+      // Check if it's already one of our custom error messages
+      if (error.message.startsWith('Upload failed:') || 
+          error.message.includes('Network error') ||
+          error.message.includes('File size exceeds') ||
+          error.message.includes('Invalid file type')) {
+        throw error; // Re-throw our custom errors as-is
+      }
+      
+      console.error('Unexpected upload error:', error.stack);
       throw new Error('Failed to upload video. Please try again.');
     }
     
