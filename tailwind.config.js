@@ -18,6 +18,7 @@ module.exports = {
           100: '#f3f4f6',
           200: '#e5e7eb',
           300: '#d1d5db',
+          700: '#374151', // Added missing secondary-700 variant
           800: '#1f2937',
           900: '#111827',
         },
