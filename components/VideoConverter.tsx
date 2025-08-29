@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import UploadZone from './UploadZone'
 import VideoPreview from './VideoPreview'
 import ConversionControls from './ConversionControls'
-import { VideoUpload, ConversionJob, ConversionFormat } from '@/types'
+import { VideoUpload, ConversionJob, ConversionFormat, extractSelectValue, createSelectValue } from '@/types'
 import { VideoProcessor } from '@/lib/video-processor'
 import { uploadVideo, createConversionJob } from '@/lib/cosmic'
 import { startVideoConversion } from '@/lib/video-processor'
@@ -147,14 +147,8 @@ export default function VideoConverter() {
                   name: uploadResult.media.name
                 },
                 output_video: null,
-                status: {
-                  key: 'pending',
-                  value: 'pending'
-                },
-                format: {
-                  key: 'tiktok',
-                  value: 'tiktok'
-                },
+                status: createSelectValue('pending'),
+                format: createSelectValue('tiktok'),
                 crop_settings: JSON.stringify({
                   position: 'center',
                   smart_crop: true,
@@ -176,8 +170,8 @@ export default function VideoConverter() {
               metadata: {
                 input_video: job.metadata.input_video,
                 output_video: job.metadata.output_video,
-                status: job.metadata.status?.key || job.metadata.status || 'pending',
-                format: job.metadata.format?.key || job.metadata.format || 'tiktok',
+                status: job.metadata.status,
+                format: job.metadata.format,
                 crop_settings: typeof job.metadata.crop_settings === 'string' 
                   ? JSON.parse(job.metadata.crop_settings)
                   : job.metadata.crop_settings || {
@@ -255,12 +249,16 @@ export default function VideoConverter() {
   const handleSettingsChange = (settings: Partial<ConversionJob['metadata']['crop_settings']>) => {
     if (!currentJob) return
 
+    const currentCropSettings = typeof currentJob.metadata.crop_settings === 'string' 
+      ? JSON.parse(currentJob.metadata.crop_settings)
+      : currentJob.metadata.crop_settings
+
     setCurrentJob(prev => prev ? {
       ...prev,
       metadata: {
         ...prev.metadata,
         crop_settings: {
-          ...prev.metadata.crop_settings,
+          ...currentCropSettings,
           ...settings
         }
       }
@@ -271,13 +269,17 @@ export default function VideoConverter() {
     if (!currentJob) return
 
     const aspectRatio = VideoProcessor.getAspectRatio(format)
+    const currentCropSettings = typeof currentJob.metadata.crop_settings === 'string' 
+      ? JSON.parse(currentJob.metadata.crop_settings)
+      : currentJob.metadata.crop_settings
+
     setCurrentJob(prev => prev ? {
       ...prev,
       metadata: {
         ...prev.metadata,
-        format,
+        format: createSelectValue(format),
         crop_settings: {
-          ...prev.metadata.crop_settings,
+          ...currentCropSettings,
           aspect_ratio: aspectRatio
         }
       }

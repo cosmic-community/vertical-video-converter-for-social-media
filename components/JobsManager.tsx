@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ConversionJob } from '@/types'
+import { ConversionJob, extractSelectValue } from '@/types'
 import { getConversionJobs } from '@/lib/cosmic'
 import { Download, RefreshCw, Eye, Trash2 } from 'lucide-react'
 
@@ -28,7 +28,7 @@ export default function JobsManager() {
     }
   }
 
-  const getStatusColor = (status: ConversionJob['metadata']['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
         return 'text-green-400 bg-green-500/10'
@@ -104,92 +104,98 @@ export default function JobsManager() {
       </div>
 
       <div className="grid gap-6">
-        {jobs.map(job => (
-          <div key={job.id} className="bg-secondary-800 rounded-lg p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-1">
-                  {job.title}
-                </h3>
-                <p className="text-sm text-secondary-300">
-                  Created {formatDate(job.created_at)}
-                </p>
+        {jobs.map(job => {
+          // Extract simple values from Cosmic select-dropdown format
+          const jobStatus = extractSelectValue(job.metadata.status)
+          const jobFormat = extractSelectValue(job.metadata.format)
+          
+          return (
+            <div key={job.id} className="bg-secondary-800 rounded-lg p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-1">
+                    {job.title}
+                  </h3>
+                  <p className="text-sm text-secondary-300">
+                    Created {formatDate(job.created_at)}
+                  </p>
+                </div>
+                <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(jobStatus)}`}>
+                  {jobStatus.charAt(0).toUpperCase() + jobStatus.slice(1)}
+                </span>
               </div>
-              <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(job.metadata.status)}`}>
-                {job.metadata.status.charAt(0).toUpperCase() + job.metadata.status.slice(1)}
-              </span>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <span className="text-xs text-secondary-300">Input Video</span>
-                <p className="text-sm text-white truncate">
-                  {job.metadata.input_video.name}
-                </p>
-              </div>
-              <div>
-                <span className="text-xs text-secondary-300">Format</span>
-                <p className="text-sm text-white">
-                  {job.metadata.format.charAt(0).toUpperCase() + job.metadata.format.slice(1).replace('-', ' ')}
-                </p>
-              </div>
-              <div>
-                <span className="text-xs text-secondary-300">Progress</span>
-                <p className="text-sm text-white">
-                  {job.metadata.progress || 0}%
-                </p>
-              </div>
-            </div>
-
-            {job.metadata.progress && job.metadata.progress > 0 && job.metadata.progress < 100 && (
-              <div className="mb-4">
-                <div className="progress-bar">
-                  <div 
-                    className="progress-fill" 
-                    style={{ width: `${job.metadata.progress}%` }}
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <span className="text-xs text-secondary-300">Input Video</span>
+                  <p className="text-sm text-white truncate">
+                    {job.metadata.input_video.name}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs text-secondary-300">Format</span>
+                  <p className="text-sm text-white">
+                    {jobFormat.charAt(0).toUpperCase() + jobFormat.slice(1).replace('-', ' ')}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs text-secondary-300">Progress</span>
+                  <p className="text-sm text-white">
+                    {job.metadata.progress || 0}%
+                  </p>
                 </div>
               </div>
-            )}
 
-            {job.metadata.error_message && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                <p className="text-red-400 text-sm">{job.metadata.error_message}</p>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="flex space-x-2">
-                {job.metadata.output_video && (
-                  <a
-                    href={job.metadata.output_video.url}
-                    download={job.metadata.output_video.name}
-                    className="btn-primary flex items-center text-sm"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </a>
-                )}
-                
-                <a
-                  href={job.metadata.input_video.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-secondary flex items-center text-sm"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  View Original
-                </a>
-              </div>
-
-              {(job.metadata.status === 'failed' || job.metadata.status === 'cancelled') && (
-                <button className="text-red-400 hover:text-red-300 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              {job.metadata.progress && job.metadata.progress > 0 && job.metadata.progress < 100 && (
+                <div className="mb-4">
+                  <div className="progress-bar">
+                    <div 
+                      className="progress-fill" 
+                      style={{ width: `${job.metadata.progress}%` }}
+                    />
+                  </div>
+                </div>
               )}
+
+              {job.metadata.error_message && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-red-400 text-sm">{job.metadata.error_message}</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <div className="flex space-x-2">
+                  {job.metadata.output_video && (
+                    <a
+                      href={job.metadata.output_video.url}
+                      download={job.metadata.output_video.name}
+                      className="btn-primary flex items-center text-sm"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </a>
+                  )}
+                  
+                  <a
+                    href={job.metadata.input_video.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary flex items-center text-sm"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Original
+                  </a>
+                </div>
+
+                {(jobStatus === 'failed' || jobStatus === 'cancelled') && (
+                  <button className="text-red-400 hover:text-red-300 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

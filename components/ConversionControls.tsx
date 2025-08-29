@@ -1,6 +1,6 @@
 'use client'
 
-import { ConversionControlsProps, ConversionFormat, CropPosition } from '@/types'
+import { ConversionControlsProps, ConversionFormat, CropPosition, extractSelectValue } from '@/types'
 import { Play, Settings, Download, X } from 'lucide-react'
 
 interface ExtendedConversionControlsProps extends ConversionControlsProps {
@@ -32,8 +32,17 @@ export default function ConversionControls({
     { value: 'smart', label: 'Smart (AI)' }
   ]
 
-  const canStart = job.metadata.status === 'pending' && !isProcessing
-  const isComplete = job.metadata.status === 'completed'
+  // Parse crop settings if it's a string, otherwise use as object
+  const cropSettings = typeof job.metadata.crop_settings === 'string' 
+    ? JSON.parse(job.metadata.crop_settings)
+    : job.metadata.crop_settings
+
+  // Extract simple values from Cosmic select-dropdown format
+  const currentStatus = extractSelectValue(job.metadata.status)
+  const currentFormat = extractSelectValue(job.metadata.format)
+
+  const canStart = currentStatus === 'pending' && !isProcessing
+  const isComplete = currentStatus === 'completed'
   const currentProgress = job.metadata.progress || 0
 
   return (
@@ -66,7 +75,7 @@ export default function ConversionControls({
               onClick={() => onFormatChange(format.value)}
               disabled={isProcessing}
               className={`p-3 text-left rounded-lg border transition-colors ${
-                job.metadata.format === format.value
+                currentFormat === format.value
                   ? 'border-primary-500 bg-primary-500/10 text-white'
                   : 'border-secondary-300 bg-secondary-800 text-secondary-300 hover:text-white hover:border-primary-500'
               }`}
@@ -88,7 +97,7 @@ export default function ConversionControls({
           Crop Position
         </label>
         <select
-          value={job.metadata.crop_settings.position}
+          value={cropSettings?.position || 'center'}
           onChange={(e) => onSettingsChange({ position: e.target.value as CropPosition })}
           disabled={isProcessing}
           className="w-full bg-secondary-800 border border-secondary-300 rounded-lg px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
@@ -106,7 +115,7 @@ export default function ConversionControls({
         <label className="flex items-center">
           <input
             type="checkbox"
-            checked={job.metadata.crop_settings.smart_crop}
+            checked={cropSettings?.smart_crop || false}
             onChange={(e) => onSettingsChange({ smart_crop: e.target.checked })}
             disabled={isProcessing}
             className="mr-3 w-4 h-4 text-primary-500 bg-secondary-800 border-secondary-300 rounded focus:ring-primary-500"
@@ -179,15 +188,15 @@ export default function ConversionControls({
           <div className="flex justify-between">
             <span className="text-secondary-300">Status:</span>
             <span className={`font-medium ${
-              job.metadata.status === 'completed' 
+              currentStatus === 'completed' 
                 ? 'text-green-400'
-                : job.metadata.status === 'processing'
+                : currentStatus === 'processing'
                 ? 'text-yellow-400'
-                : job.metadata.status === 'failed'
+                : currentStatus === 'failed'
                 ? 'text-red-400'
                 : 'text-white'
             }`}>
-              {job.metadata.status.charAt(0).toUpperCase() + job.metadata.status.slice(1)}
+              {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
             </span>
           </div>
         </div>
