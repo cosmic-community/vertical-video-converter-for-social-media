@@ -135,6 +135,9 @@ export default function VideoConverter() {
             const aspectRatio = VideoProcessor.getAspectRatio('tiktok')
             const uniqueSlug = generateUniqueSlug(file.name)
             
+            // Fix: Ensure format key is properly typed as ConversionFormat
+            const defaultFormat: ConversionFormat = 'tiktok'
+            
             const jobData = {
               title: `Convert ${file.name}`,
               type: 'conversion-jobs' as const,
@@ -148,7 +151,7 @@ export default function VideoConverter() {
                 },
                 output_video: null,
                 status: createSelectValue('pending' as JobStatus),
-                format: createSelectValue('tiktok'),
+                format: createSelectValue(defaultFormat),
                 crop_settings: JSON.stringify({
                   position: 'center',
                   smart_crop: true,
@@ -253,21 +256,30 @@ export default function VideoConverter() {
       ? JSON.parse(currentJob.metadata.crop_settings)
       : currentJob.metadata.crop_settings
 
-    // Ensure we have a valid current crop settings object
+    // Fix: Handle undefined currentCropSettings with proper type checking
     if (!currentCropSettings || typeof currentCropSettings !== 'object') {
       return
     }
 
-    setCurrentJob(prev => prev ? {
-      ...prev,
-      metadata: {
-        ...prev.metadata,
-        crop_settings: {
-          ...currentCropSettings,
-          ...settings
+    setCurrentJob(prev => {
+      if (!prev) return null
+      
+      // Ensure currentCropSettings is not null/undefined before spreading
+      const safeCropSettings = currentCropSettings && typeof currentCropSettings === 'object' 
+        ? currentCropSettings 
+        : { position: 'center', smart_crop: true, aspect_ratio: { width: 9, height: 16 } }
+      
+      return {
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          crop_settings: {
+            ...safeCropSettings,
+            ...settings
+          }
         }
       }
-    } : null)
+    })
   }
 
   const handleFormatChange = (format: ConversionFormat) => {
@@ -278,22 +290,31 @@ export default function VideoConverter() {
       ? JSON.parse(currentJob.metadata.crop_settings)
       : currentJob.metadata.crop_settings
 
-    // Ensure we have a valid current crop settings object
+    // Fix: Handle undefined currentCropSettings with proper type checking
     if (!currentCropSettings || typeof currentCropSettings !== 'object') {
       return
     }
 
-    setCurrentJob(prev => prev ? {
-      ...prev,
-      metadata: {
-        ...prev.metadata,
-        format: createSelectValue(format),
-        crop_settings: {
-          ...currentCropSettings,
-          aspect_ratio: aspectRatio
+    setCurrentJob(prev => {
+      if (!prev) return null
+      
+      // Ensure currentCropSettings is not null/undefined before spreading
+      const safeCropSettings = currentCropSettings && typeof currentCropSettings === 'object' 
+        ? currentCropSettings 
+        : { position: 'center', smart_crop: true, aspect_ratio: { width: 9, height: 16 } }
+      
+      return {
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          format: createSelectValue(format),
+          crop_settings: {
+            ...safeCropSettings,
+            aspect_ratio: aspectRatio
+          }
         }
       }
-    } : null)
+    })
   }
 
   const hasUploadedFiles = uploads.some(upload => upload.status === 'uploaded')
