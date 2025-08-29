@@ -31,32 +31,33 @@ try {
       readKey,
       writeKey: writeKey || undefined,
     })
-    console.log('✓ Cosmic client initialized successfully')
+    console.log('✓ Cosmic client initialized successfully with bucket:', bucketSlug)
   } else {
+    console.error('❌ Environment validation failed:', validation.missingVars)
     // Create a placeholder client that will throw meaningful errors
     cosmic = {
       objects: {
         find: () => { 
           const validation = validateEnvironmentVariables()
-          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
         },
         findOne: () => { 
           const validation = validateEnvironmentVariables()
-          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
         },
         insertOne: () => { 
           const validation = validateEnvironmentVariables()
-          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
         },
         updateOne: () => { 
           const validation = validateEnvironmentVariables()
-          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
         },
       },
       media: {
         insertOne: () => { 
           const validation = validateEnvironmentVariables()
-          throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}. Please check your .env configuration.`)
+          throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set.`)
         },
       }
     } as any
@@ -78,13 +79,16 @@ export async function getConversionJobs(): Promise<import('../types').Conversion
   try {
     const validation = validateEnvironmentVariables()
     if (!validation.isValid) {
-      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
     }
     
+    console.log('Fetching conversion jobs from bucket:', bucketSlug)
     const response = await cosmic.objects
       .find({ type: 'conversion-jobs' })
       .props(['id', 'title', 'slug', 'metadata', 'created_at'])
       .depth(1);
+    
+    console.log('✓ Successfully fetched', response.objects?.length || 0, 'conversion jobs')
     
     // Manual sorting by created date (newest first)
     return (response.objects as import('../types').ConversionJob[]).sort((a, b) => {
@@ -93,10 +97,11 @@ export async function getConversionJobs(): Promise<import('../types').Conversion
       return dateB - dateA;
     });
   } catch (error) {
+    console.error('Error fetching conversion jobs:', error)
     if (hasStatus(error) && error.status === 404) {
       return [];
     }
-    throw new Error('Failed to fetch conversion jobs');
+    throw new Error('Failed to fetch conversion jobs: ' + (error instanceof Error ? error.message : 'Unknown error'));
   }
 }
 
@@ -104,7 +109,7 @@ export async function getConversionJob(id: string): Promise<import('../types').C
   try {
     const validation = validateEnvironmentVariables()
     if (!validation.isValid) {
-      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
     }
     
     const response = await cosmic.objects
@@ -124,10 +129,15 @@ export async function createConversionJob(jobData: import('../types').CreateConv
   try {
     const validation = validateEnvironmentVariables()
     if (!validation.isValid) {
-      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
     }
     
-    console.log('Creating conversion job with data:', jobData);
+    console.log('Creating conversion job with data:', {
+      type: jobData.type,
+      title: jobData.title,
+      slug: jobData.slug,
+      inputVideoId: jobData.metadata.input_video.id
+    });
     
     const response = await cosmic.objects.insertOne({
       type: 'conversion-jobs',
@@ -136,11 +146,11 @@ export async function createConversionJob(jobData: import('../types').CreateConv
       metadata: jobData.metadata
     });
     
-    console.log('Conversion job created successfully:', response);
+    console.log('✓ Conversion job created successfully with ID:', response.object.id);
     return response.object as import('../types').ConversionJob;
   } catch (error) {
-    console.error('Error creating conversion job:', error);
-    throw new Error('Failed to create conversion job');
+    console.error('❌ Error creating conversion job:', error);
+    throw new Error('Failed to create conversion job: ' + (error instanceof Error ? error.message : 'Unknown error'));
   }
 }
 
@@ -148,20 +158,20 @@ export async function updateConversionJob(id: string, updates: import('../types'
   try {
     const validation = validateEnvironmentVariables()
     if (!validation.isValid) {
-      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
     }
     
-    console.log('Updating conversion job:', id, 'with updates:', updates);
+    console.log('Updating conversion job:', id, 'with updates:', Object.keys(updates));
     
     const response = await cosmic.objects.updateOne(id, {
       metadata: updates
     });
     
-    console.log('Conversion job updated successfully:', response);
+    console.log('✓ Conversion job updated successfully');
     return response.object as import('../types').ConversionJob;
   } catch (error) {
-    console.error('Error updating conversion job:', error);
-    throw new Error('Failed to update conversion job');
+    console.error('❌ Error updating conversion job:', error);
+    throw new Error('Failed to update conversion job: ' + (error instanceof Error ? error.message : 'Unknown error'));
   }
 }
 
@@ -170,7 +180,7 @@ export async function getUserSettings(): Promise<import('../types').UserSettings
   try {
     const validation = validateEnvironmentVariables()
     if (!validation.isValid) {
-      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
     }
     
     const response = await cosmic.objects
@@ -192,7 +202,7 @@ export async function getConversionPresets(): Promise<import('../types').Convers
   try {
     const validation = validateEnvironmentVariables()
     if (!validation.isValid) {
-      throw new Error(`Missing environment variables: ${validation.missingVars.join(', ')}`)
+      throw new Error(`Server configuration error: Missing API credentials (${validation.missingVars.join(', ')})`)
     }
     
     const response = await cosmic.objects
@@ -210,13 +220,17 @@ export async function getConversionPresets(): Promise<import('../types').Convers
 
 // Enhanced file upload function with comprehensive error handling and logging
 export async function uploadVideo(file: File, folder: string = 'videos') {
+  console.log('=== UPLOAD VIDEO FUNCTION CALLED ===')
+  
   if (!file) {
-    throw new Error('No file provided for upload');
+    const error = 'No file provided for upload';
+    console.error('❌', error)
+    throw new Error(error);
   }
 
-  console.log('Upload request details:', {
+  console.log('📁 Upload request details:', {
     fileName: file.name,
-    fileSize: file.size,
+    fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
     fileType: file.type,
     folder: folder
   });
@@ -224,35 +238,37 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
   // Validate file size
   const maxSize = 500 * 1024 * 1024; // 500MB
   if (file.size > maxSize) {
-    console.error('File size validation failed:', file.size, 'exceeds', maxSize);
-    throw new Error('File size exceeds 500MB limit');
+    const error = `File size exceeds 500MB limit (current: ${(file.size / 1024 / 1024).toFixed(2)}MB)`;
+    console.error('❌', error);
+    throw new Error(error);
   }
 
   // Validate file type
   const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
   if (!validTypes.includes(file.type)) {
-    console.error('File type validation failed:', file.type, 'not in', validTypes);
-    throw new Error('Invalid file type. Only MP4, MOV, AVI, and WebM files are supported');
+    const error = `Invalid file type: ${file.type}. Only MP4, MOV, AVI, and WebM files are supported`;
+    console.error('❌', error);
+    throw new Error(error);
   }
 
   // Check environment variables with detailed logging
   const validation = validateEnvironmentVariables()
-  console.log('Environment variables validation:', {
+  console.log('🔑 Environment variables check:', {
     isValid: validation.isValid,
     missingVars: validation.missingVars,
-    bucketSlug: !!bucketSlug,
-    readKey: !!readKey,
-    writeKey: !!writeKey
+    bucketSlug: bucketSlug ? '✓ Set' : '❌ Missing',
+    readKey: readKey ? '✓ Set' : '❌ Missing',
+    writeKey: writeKey ? '✓ Set' : '❌ Missing'
   });
 
   if (!validation.isValid) {
-    const errorMessage = `Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are set in your .env file.`
-    console.error(errorMessage);
+    const errorMessage = `Server configuration error: Missing API credentials (${validation.missingVars.join(', ')}). Please ensure all required environment variables are properly configured in your deployment settings.`
+    console.error('❌', errorMessage);
     throw new Error(errorMessage);
   }
 
   try {
-    console.log('Starting Cosmic media upload...');
+    console.log('🚀 Starting Cosmic media upload...');
     
     // Use the Cosmic client that's already configured
     const response = await cosmic.media.insertOne({
@@ -260,11 +276,15 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
       folder: folder
     });
     
-    console.log('Raw Cosmic API response:', response);
+    console.log('📡 Raw Cosmic API response received:', {
+      hasResponse: !!response,
+      responseType: typeof response,
+      responseKeys: response ? Object.keys(response) : []
+    });
     
     // Enhanced response validation with detailed logging
     if (!response || typeof response !== 'object') {
-      console.error('Invalid response type:', typeof response, response);
+      console.error('❌ Invalid response type:', typeof response, response);
       throw new Error('Upload failed: Invalid server response format');
     }
     
@@ -272,34 +292,39 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     let mediaObject = null;
     
     if (response.media && typeof response.media === 'object') {
-      console.log('Found media in response.media');
+      console.log('✓ Found media in response.media');
       mediaObject = response.media;
     } else if (response.object && typeof response.object === 'object') {
-      console.log('Found media in response.object');
+      console.log('✓ Found media in response.object');
       mediaObject = response.object;
     } else if (response.id && response.url) {
-      console.log('Response itself contains media data');
+      console.log('✓ Response itself contains media data');
       mediaObject = response;
     } else {
-      console.error('No media object found in response structure:', Object.keys(response));
+      console.error('❌ No media object found in response structure:', Object.keys(response));
       throw new Error('Upload completed but server response format is unrecognized');
     }
     
     if (!mediaObject) {
-      console.error('mediaObject is null after extraction attempts');
+      console.error('❌ mediaObject is null after extraction attempts');
       throw new Error('Upload completed but no media data found in response');
     }
     
-    console.log('Extracted media object:', mediaObject);
+    console.log('📋 Extracted media object:', {
+      id: mediaObject.id,
+      url: !!mediaObject.url,
+      name: mediaObject.name || mediaObject.original_name,
+      type: mediaObject.type
+    });
     
     // Validate essential properties with detailed error messages
     if (!mediaObject.id) {
-      console.error('Media object structure:', Object.keys(mediaObject));
+      console.error('❌ Media object missing ID. Structure:', Object.keys(mediaObject));
       throw new Error('Upload completed but media ID is missing from response');
     }
     
     if (!mediaObject.url) {
-      console.error('Media object with ID but no URL:', mediaObject.id);
+      console.error('❌ Media object missing URL for ID:', mediaObject.id);
       throw new Error('Upload completed but media URL is missing from response');
     }
     
@@ -315,12 +340,12 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
       }
     };
     
-    console.log('Upload successful! Standardized response:', standardizedResponse);
+    console.log('✅ Upload successful! Media uploaded with ID:', standardizedResponse.media.id);
     
     return standardizedResponse;
     
   } catch (error) {
-    console.error('Cosmic upload error details:', {
+    console.error('❌ Cosmic upload error details:', {
       error: error,
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
@@ -331,7 +356,7 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     if (error instanceof TypeError) {
       const errorMessage = error.message.toLowerCase();
       if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
-        throw new Error('Network error: Unable to reach upload server. Please check your internet connection.');
+        throw new Error('Network error: Unable to reach upload server. Please check your internet connection and try again.');
       } else if (errorMessage.includes('cannot read properties')) {
         throw new Error('Upload failed: Server returned invalid data. Please try again.');
       }
@@ -340,14 +365,14 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
     
     // Handle Cosmic API specific errors
     if (hasStatus(error)) {
-      console.error('API status error:', error.status);
+      console.error('❌ API status error:', error.status);
       switch (error.status) {
         case 400:
           throw new Error('Invalid file format or corrupted file. Please try a different video.');
         case 401:
-          throw new Error('Authentication failed: Invalid API credentials.');
+          throw new Error('Authentication failed: Invalid API credentials. Please check your environment variables.');
         case 403:
-          throw new Error('Upload permission denied: Check your API key permissions.');
+          throw new Error('Upload permission denied: Check your API key permissions in Cosmic dashboard.');
         case 413:
           throw new Error('File too large: Maximum size is 500MB.');
         case 415:
@@ -358,7 +383,7 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
         case 502:
         case 503:
         case 504:
-          throw new Error('Server error: Our upload servers are temporarily unavailable. Please try again in a few minutes.');
+          throw new Error('Server error: Upload servers are temporarily unavailable. Please try again in a few minutes.');
         default:
           throw new Error(`Upload failed with server error ${error.status}. Please try again.`);
       }
