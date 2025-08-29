@@ -20,7 +20,8 @@ module.exports = {
           300: '#d1d5db',
           800: '#1f2937',
           900: '#111827',
-        }
+        },
+        border: '#d1d5db', // Added missing border color
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
