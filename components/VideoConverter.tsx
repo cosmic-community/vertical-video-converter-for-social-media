@@ -66,39 +66,18 @@ export default function VideoConverter() {
         // Update progress to show upload starting
         updateUploadProgress(uploadIndex, 10)
 
-        // Upload to Cosmic with enhanced error handling
-        console.log('Starting Cosmic upload for:', file.name)
+        // Upload to Cosmic
+        console.log('Starting upload to Cosmic for:', file.name)
         const uploadResult = await uploadVideo(file)
         
-        console.log('Upload completed successfully:', {
-          hasResult: !!uploadResult,
-          hasMedia: !!(uploadResult?.media),
-          mediaId: uploadResult?.media?.id,
-          mediaUrl: uploadResult?.media?.url
-        })
+        console.log('Upload result:', uploadResult)
         
-        // Validate upload result more thoroughly
-        if (!uploadResult) {
-          console.error('Upload result is null/undefined')
-          throw new Error('Upload failed: No result returned from server')
-        }
-        
-        if (!uploadResult.media) {
-          console.error('Upload result missing media object:', uploadResult)
-          throw new Error('Upload failed: Missing media information in response')
-        }
-        
-        if (!uploadResult.media.id) {
-          console.error('Upload result media missing id:', uploadResult.media)
-          throw new Error('Upload failed: Media object missing required ID')
-        }
-        
-        if (!uploadResult.media.url) {
-          console.error('Upload result media missing url:', uploadResult.media)
-          throw new Error('Upload failed: Media object missing required URL')
+        // Simple validation - just check if we got a result with media
+        if (!uploadResult?.media?.id || !uploadResult?.media?.url) {
+          throw new Error('Upload failed: Invalid response from server')
         }
 
-        console.log('Upload validation passed, updating status to uploaded')
+        console.log('Upload successful, updating status')
         updateUploadStatus(uploadIndex, 'uploaded')
 
         // Create conversion job for the first successful upload
