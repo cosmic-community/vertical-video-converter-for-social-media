@@ -1,36 +1,66 @@
 import { createBucketClient } from '@cosmicjs/sdk'
 
-// Validate environment variables at startup
-const bucketSlug = process.env.COSMIC_BUCKET_SLUG
-const readKey = process.env.COSMIC_READ_KEY
-const writeKey = process.env.COSMIC_WRITE_KEY
+// Get environment variables with defaults for build-time compatibility
+const bucketSlug = process.env.COSMIC_BUCKET_SLUG || ''
+const readKey = process.env.COSMIC_READ_KEY || ''
+const writeKey = process.env.COSMIC_WRITE_KEY || ''
 
-if (!bucketSlug) {
-  console.error('ERROR: Missing environment variable COSMIC_BUCKET_SLUG')
-  throw new Error('COSMIC_BUCKET_SLUG is required')
+// Only validate environment variables when actually needed (not during build)
+function validateEnvironmentVariables() {
+  if (!bucketSlug) {
+    console.error('ERROR: Missing environment variable COSMIC_BUCKET_SLUG')
+    throw new Error('COSMIC_BUCKET_SLUG is required')
+  }
+
+  if (!readKey) {
+    console.error('ERROR: Missing environment variable COSMIC_READ_KEY')
+    throw new Error('COSMIC_READ_KEY is required')
+  }
+
+  // Write key is only needed for server-side operations
+  if (!writeKey && typeof window === 'undefined') {
+    console.error('ERROR: Missing environment variable COSMIC_WRITE_KEY')
+    throw new Error('COSMIC_WRITE_KEY is required for server operations')
+  }
+
+  console.log('✓ Environment variables validated:', {
+    bucketSlug: !!bucketSlug,
+    readKey: !!readKey,
+    writeKey: !!writeKey
+  })
 }
 
-if (!readKey) {
-  console.error('ERROR: Missing environment variable COSMIC_READ_KEY')
-  throw new Error('COSMIC_READ_KEY is required')
+// Create client with conditional validation
+let cosmic: ReturnType<typeof createBucketClient>
+
+try {
+  // Only create client if we have the minimum required variables
+  if (bucketSlug && readKey) {
+    cosmic = createBucketClient({
+      bucketSlug,
+      readKey,
+      writeKey: writeKey || undefined,
+    })
+  } else {
+    // Create a placeholder client that will throw meaningful errors
+    cosmic = {
+      objects: {
+        find: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+        findOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+        insertOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+        updateOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+      },
+      media: {
+        insertOne: () => { throw new Error('Cosmic client not initialized: Missing environment variables') },
+      }
+    } as any
+  }
+} catch (error) {
+  console.error('Failed to initialize Cosmic client:', error)
+  throw error
 }
 
-if (!writeKey) {
-  console.error('ERROR: Missing environment variable COSMIC_WRITE_KEY')
-  throw new Error('COSMIC_WRITE_KEY is required')
-}
-
-console.log('✓ Environment variables validated:', {
-  bucketSlug: !!bucketSlug,
-  readKey: !!readKey,
-  writeKey: !!writeKey
-})
-
-export const cosmic = createBucketClient({
-  bucketSlug,
-  readKey,
-  writeKey,
-})
+export { cosmic }
 
 // Error handling helper
 function hasStatus(error: unknown): error is { status: number } {
@@ -40,6 +70,7 @@ function hasStatus(error: unknown): error is { status: number } {
 // Conversion jobs functions
 export async function getConversionJobs(): Promise<import('../types').ConversionJob[]> {
   try {
+    validateEnvironmentVariables()
     const response = await cosmic.objects
       .find({ type: 'conversion-jobs' })
       .props(['id', 'title', 'slug', 'metadata', 'created_at'])
@@ -61,6 +92,7 @@ export async function getConversionJobs(): Promise<import('../types').Conversion
 
 export async function getConversionJob(id: string): Promise<import('../types').ConversionJob | null> {
   try {
+    validateEnvironmentVariables()
     const response = await cosmic.objects
       .findOne({ id, type: 'conversion-jobs' })
       .depth(1);
@@ -76,6 +108,7 @@ export async function getConversionJob(id: string): Promise<import('../types').C
 
 export async function createConversionJob(jobData: import('../types').CreateConversionJobData): Promise<import('../types').ConversionJob> {
   try {
+    validateEnvironmentVariables()
     console.log('Creating conversion job with data:', jobData);
     
     const response = await cosmic.objects.insertOne({
@@ -95,6 +128,7 @@ export async function createConversionJob(jobData: import('../types').CreateConv
 
 export async function updateConversionJob(id: string, updates: import('../types').UpdateConversionJobData): Promise<import('../types').ConversionJob> {
   try {
+    validateEnvironmentVariables()
     console.log('Updating conversion job:', id, 'with updates:', updates);
     
     const response = await cosmic.objects.updateOne(id, {
@@ -112,6 +146,7 @@ export async function updateConversionJob(id: string, updates: import('../types'
 // User settings functions
 export async function getUserSettings(): Promise<import('../types').UserSettings | null> {
   try {
+    validateEnvironmentVariables()
     const response = await cosmic.objects
       .find({ type: 'user-settings' })
       .props(['id', 'title', 'metadata'])
@@ -129,6 +164,7 @@ export async function getUserSettings(): Promise<import('../types').UserSettings
 // Conversion presets functions
 export async function getConversionPresets(): Promise<import('../types').ConversionPreset[]> {
   try {
+    validateEnvironmentVariables()
     const response = await cosmic.objects
       .find({ type: 'conversion-presets' })
       .props(['id', 'title', 'metadata']);
@@ -185,6 +221,9 @@ export async function uploadVideo(file: File, folder: string = 'videos') {
 
   try {
     console.log('Starting Cosmic media upload...');
+    
+    // Validate environment variables before upload
+    validateEnvironmentVariables()
     
     // Use the Cosmic client that's already configured
     const response = await cosmic.media.insertOne({
